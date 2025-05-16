@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Neon Pinball Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at center, #0a0a0a, #000000);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Orbitron', sans-serif;
+      color: #0ff;
+      user-select: none;
+    }
+
+    canvas {
+      border: 4px solid #0ff;
+      border-radius: 20px;
+      box-shadow: 0 0 10px #0ff, 0 0 20px #0ff, 0 0 40px #00ffff88;
+      background: #111;
+      display: block;
+      margin: 0 auto;
+    }
+
+    h1 {
+      position: absolute;
+      top: 20px;
+      font-size: 2rem;
+      color: #0ff;
+      text-shadow: 0 0 10px #0ff, 0 0 20px #0ff;
+      letter-spacing: 4px;
+    }
+
+    #instructions {
+      position: absolute;
+      bottom: 20px;
+      color: #0ff99;
+      font-size: 1rem;
+      text-align: center;
+      width: 100%;
+      text-shadow: 0 0 8px #0ff66;
+    }
+  </style>
+</head>
+<body>
+  <h1>NEON PINBALL</h1>
+  <canvas id="gameCanvas" width="500" height="700"></canvas>
+  <div id="instructions">
+    Use <strong>Q</strong> (left) and <strong>R</strong> (right) to control flippers.
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const ball = {
+      x: canvas.width / 2,
+      y: canvas.height - 100,
+      radius: 12,
+      vx: 3,
+      vy: -6,
+      color: '#0ff',
+      draw() {
+        ctx.beginPath();
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = this.color;
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.closePath();
+
+        const neonColors = ['#0ff', '#f0f', '#ff0', '#0f0', '#f00'];
+        this.color = neonColors[Math.floor(Math.random() * neonColors.length)];
+      },
+      move() {
+        this.x += this.vx;
+        this.y += this.vy;
+      }
+    };
+
+    const flipperLength = 120;
+    const flipperWidth = 20;
+    const maxFlipperAngle = 0.4;
+
+    function Flipper(x, y, isLeft) {
+      this.x = x;
+      this.y = y;
+      this.isLeft = isLeft;
+      this.angle = 0;
+      this.speed = 0.15;
+      this.active = false;
+
+      this.draw = function () {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.isLeft ? -this.angle : this.angle);
+        ctx.fillStyle = this.isLeft ? '#ff00ff' : '#00ff00';
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.moveTo(0, -flipperWidth / 2);
+        ctx.lineTo(flipperLength, -flipperWidth / 2);
+        ctx.lineTo(flipperLength, flipperWidth / 2);
+        ctx.lineTo(0, flipperWidth / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      };
+
+      this.update = function () {
+        if (this.active && this.angle < maxFlipperAngle) {
+          this.angle += this.speed;
+        } else if (!this.active && this.angle > 0) {
+          this.angle -= this.speed;
+        }
+        if (this.angle < 0) this.angle = 0;
+        if (this.angle > maxFlipperAngle) this.angle = maxFlipperAngle;
+      };
+    }
+
+    const leftFlipper = new Flipper(canvas.width / 2 - 100, canvas.height - 80, true);
+    const rightFlipper = new Flipper(canvas.width / 2 + 100, canvas.height - 80, false);
+
+    const bumperColors = ['#0ff', '#f0f', '#ff0', '#0f0', '#f00', '#00f'];
+
+    const bumpers = [
+      { x: canvas.width / 2, y: 150, radius: 40, color: bumperColors[Math.floor(Math.random() * bumperColors.length)] },
+      { x: canvas.width / 2 - 140, y: 300, radius: 30, color: bumperColors[Math.floor(Math.random() * bumperColors.length)] },
+      { x: canvas.width / 2 + 140, y: 300, radius: 30, color: bumperColors[Math.floor(Math.random() * bumperColors.length)] },
+    ];
+
+    function drawBumpers() {
+      bumpers.forEach(b => {
+        ctx.beginPath();
+        ctx.fillStyle = b.color;
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = 20;
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.closePath();
+      });
+    }
+
+    function circleCollision(ball, circle) {
+      const dx = ball.x - circle.x;
+      const dy = ball.y - circle.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      return dist < ball.radius + circle.radius;
+    }
+
+    function bumperBounce(bumper) {
+      const dx = ball.x - bumper.x;
+      const dy = ball.y - bumper.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const nx = dx / dist;
+      const ny = dy / dist;
+      const dot = ball.vx * nx + ball.vy * ny;
+      ball.vx = ball.vx - 2 * dot * nx;
+      ball.vy = ball.vy - 2 * dot * ny;
+      ball.vx *= 1.1;
+      ball.vy *= 1.1;
+      const overlap = ball.radius + bumper.radius - dist;
+      ball.x += nx * overlap;
+      ball.y += ny * overlap;
+    }
+
+    function checkFlipperCollision(flipper) {
+      const angleDir = flipper.isLeft ? -1 : 1;
+      const sin = Math.sin(flipper.angle * angleDir);
+      const cos = Math.cos(flipper.angle * angleDir);
+      const relX = cos * (ball.x - flipper.x) + sin * (ball.y - flipper.y);
+      const relY = -sin * (ball.x - flipper.x) + cos * (ball.y - flipper.y);
+      const rect = {
+        x: 0,
+        y: -flipperWidth / 2,
+        w: flipperLength,
+        h: flipperWidth
+      };
+
+      if (
+        relX > rect.x - ball.radius &&
+        relX < rect.x + rect.w + ball.radius &&
+        relY > rect.y - ball.radius &&
+        relY < rect.y + rect.h + ball.radius
+      ) {
+        ball.vy = -Math.abs(ball.vy) * 1.5 - Math.abs(flipper.angle) * 15;
+        ball.vx += angleDir * 5;
+        const pushOutDistance = ball.radius;
+        ball.x += pushOutDistance * cos;
+        ball.y += pushOutDistance * sin;
+        ball.vx += angleDir * 0.5;
+      }
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.code === 'KeyQ') leftFlipper.active = true;
+      if (e.code === 'KeyR') rightFlipper.active = true;
+    });
+
+    document.addEventListener('keyup', e => {
+      if (e.code === 'KeyQ') leftFlipper.active = false;
+      if (e.code === 'KeyR') rightFlipper.active = false;
+    });
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      drawBumpers();
+
+      leftFlipper.update();
+      leftFlipper.draw();
+      rightFlipper.update();
+      rightFlipper.draw();
+
+      ball.move();
+
+      if (ball.x - ball.radius < 0) {
+        ball.x = ball.radius;
+        ball.vx = -ball.vx;
+      }
+      if (ball.x + ball.radius > canvas.width) {
+        ball.x = canvas.width - ball.radius;
+        ball.vx = -ball.vx;
+      }
+      if (ball.y - ball.radius < 0) {
+        ball.y = ball.radius;
+        ball.vy = -ball.vy;
+      }
+      if (ball.y - ball.radius > canvas.height) {
+        ball.x = canvas.width / 2;
+        ball.y = canvas.height - 100;
+        ball.vx = 3 * (Math.random() > 0.5 ? 1 : -1);
+        ball.vy = -6;
+      }
+
+      bumpers.forEach(b => {
+        if (circleCollision(ball, b)) bumperBounce(b);
+      });
+
+      checkFlipperCollision(leftFlipper);
+      checkFlipperCollision(rightFlipper);
+
+      ball.draw();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>
